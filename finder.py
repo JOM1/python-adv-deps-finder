@@ -40,7 +40,7 @@ def getglobals(func_name):
 
 def line_contains_var_in_list(_line, _list):
     for var in _list:
-        if re.search(var, _line):
+        if re.search("[^\w]"+var+"([^\w]|)", _line):
             return True
     return False
 
@@ -49,11 +49,24 @@ def get_needed_source(func_name):
 
     this_module = sys.modules['__main__']
     full_source_lines = re.split("\n", getsource(this_module))
-    all_imports = filter(lambda x: re.search("\s?import\s", x), full_source_lines)
+    all_imports = list(filter(lambda x: re.search("\s?import\s", x), full_source_lines))
+    
+    needed_imports = []
+    for imp in all_imports:
+       if line_contains_var_in_list(imp, needed_globals['other']):
+           needed_imports.append(imp)
 
-    needed_imports = filter(lambda x: line_contains_var_in_list(x,
-                                needed_globals['other']), all_imports)
-
+    imported_funcs = []
+    for func in needed_globals['function']:
+        for imp in all_imports:
+            if re.search("[^\w]"+func+"([^\w]|)", imp):
+                needed_imports.append(imp)
+                imported_funcs.append(func)
+                break
+    unimported_funcs = [func for func in
+                         needed_globals['function'] if
+                          func not in imported_funcs]
+    
     needed_source = ""
 
     for imp in needed_imports:
@@ -61,18 +74,18 @@ def get_needed_source(func_name):
 
     needed_source += "\n" + getsource(getattr(this_module, func_name)) + "\n"
 
-    for func in needed_globals['function']:
+    for func in unimported_funcs:
         needed_source += getsource(getattr(this_module, func)) + "\n"
     
     return needed_source
 
 if __name__ != '__main__':
     exit()
-    
+
 from sys import modules
 
 def a():
-    b()
+    getsource(b)
     sys.modules['__main__'].__dict__
 def b():
     modules['__main__']

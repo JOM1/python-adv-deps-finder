@@ -4,17 +4,6 @@ import io
 import re
 from dill.source import getsource
 
-def a():
-    b()
-    sys.modules['__main__'].__dict__
-def b():
-    f()
-def f():
-    re.match("","")
-    pass
-
-
-
 def getglobals(func_name):
     this_module = sys.modules['__main__']
 
@@ -33,21 +22,21 @@ def getglobals(func_name):
 
     globals_by_type = dict()
     globals_by_type['function'] = []
-    globals_by_type['module'] = []
+    globals_by_type['other'] = []
     
     for global_var in globals_used:
-        type_of = type(getattr(this_module, global_var)).__name__
-        if type_of == 'function':
-            globals_by_type['function'].append(global_var)
-            other_globals = getglobals(global_var)
-            globals_by_type['function'].extend(other_globals['function'])
-            globals_by_type['module'].extend(other_globals['module'])
-        elif type_of == 'module':
-            globals_by_type['module'].append(global_var)
+        try:
+            type_of = type(getattr(this_module, global_var)).__name__
+            if type_of == 'function':
+                globals_by_type['function'].append(global_var)
+                other_globals = getglobals(global_var)
+                globals_by_type['function'].extend(other_globals['function'])
+                globals_by_type['other'].extend(other_globals['other'])
+            else:
+                globals_by_type['other'].append(global_var)
+        except AttributeError:
+            pass
     return globals_by_type
-
-
-preprocess_name = 'a'
 
 def line_contains_var_in_list(_line, _list):
     for var in _list:
@@ -56,15 +45,15 @@ def line_contains_var_in_list(_line, _list):
     return False
 
 def get_needed_source(func_name):
-    needed_globals = getglobals(preprocess_name)
+    needed_globals = getglobals(func_name)
 
     this_module = sys.modules['__main__']
     full_source_lines = re.split("\n", getsource(this_module))
-    all_imports = filter(lambda x: re.match("\s?import\s", x), full_source_lines)
-    
+    all_imports = filter(lambda x: re.search("\s?import\s", x), full_source_lines)
+
     needed_imports = filter(lambda x: line_contains_var_in_list(x,
-                                        needed_globals['module']), all_imports)
-    
+                                needed_globals['other']), all_imports)
+
     needed_source = ""
 
     for imp in needed_imports:
@@ -77,4 +66,21 @@ def get_needed_source(func_name):
     
     return needed_source
 
-print(get_needed_source(preprocess_name))
+if __name__ != '__main__':
+    exit()
+    
+from sys import modules
+
+def a():
+    b()
+    sys.modules['__main__'].__dict__
+def b():
+    modules['__main__']
+    f()
+def f():
+    print('a')
+    re.match("","")
+    pass
+
+
+print(get_needed_source('a'))
